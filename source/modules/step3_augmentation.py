@@ -1,16 +1,18 @@
 """
-Step 3: Data Augmentation
+Step 3: Data Augmentation (PyTorch Implementation)
 Implements various augmentation techniques to increase dataset diversity.
 """
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import torch
+from torch.utils.data import Dataset
+import torchvision.transforms as T
 import cv2
 from pathlib import Path
 import pandas as pd
 from typing import Tuple, List, Dict
 import logging
 import albumentations as alb
+from albumentations.pytorch import ToTensorV2
 import config
 
 logging.basicConfig(level=logging.INFO)
@@ -29,26 +31,44 @@ class DataAugmentation:
         """
         self.params = augmentation_params or config.AUGMENTATION_PARAMS
 
-    def create_keras_generator(self) -> ImageDataGenerator:
+    def create_torch_transforms(self, augment: bool = True):
         """
-        Create Keras ImageDataGenerator for augmentation.
+        Create PyTorch transforms for augmentation.
+
+        Args:
+            augment: Whether to apply augmentations
 
         Returns:
-            ImageDataGenerator object
+            torchvision transforms
         """
-        datagen = ImageDataGenerator(
-            rotation_range=self.params.get('rotation_range', 20),
-            width_shift_range=self.params.get('width_shift_range', 0.2),
-            height_shift_range=self.params.get('height_shift_range', 0.2),
-            shear_range=self.params.get('shear_range', 0.15),
-            zoom_range=self.params.get('zoom_range', 0.15),
-            horizontal_flip=self.params.get('horizontal_flip', True),
-            fill_mode=self.params.get('fill_mode', 'nearest'),
-            brightness_range=self.params.get('brightness_range', [0.8, 1.2])
-        )
+        if augment:
+            transform = T.Compose([
+                T.ToPILImage(),
+                T.RandomRotation(degrees=self.params.get('rotation_range', 20)),
+                T.RandomHorizontalFlip(p=0.5),
+                T.RandomVerticalFlip(p=0.2),
+                T.ColorJitter(
+                    brightness=0.2,
+                    contrast=0.2,
+                    saturation=0.2,
+                    hue=0.1
+                ),
+                T.RandomAffine(
+                    degrees=0,
+                    translate=(0.1, 0.1),
+                    scale=(0.9, 1.1),
+                    shear=10
+                ),
+                T.ToTensor(),
+            ])
+        else:
+            transform = T.Compose([
+                T.ToPILImage(),
+                T.ToTensor(),
+            ])
 
-        logger.info("Keras ImageDataGenerator created")
-        return datagen
+        logger.info("PyTorch transforms created")
+        return transform
 
     def create_albumentations_pipeline(self) -> alb.Compose:
         """
@@ -117,7 +137,7 @@ class DataAugmentation:
 
         Args:
             image: Input image (numpy array, values in [0, 1] or [0, 255])
-            method: Augmentation method ('keras' or 'albumentations')
+            method: Augmentation method ('torch' or 'albumentations')
 
         Returns:
             Augmented image
@@ -131,17 +151,15 @@ class DataAugmentation:
             augmented = transform(image=image)
             augmented_image = augmented['image'].astype(np.float32) / 255.0
 
-        elif method == 'keras':
-            # Keras expects values in [0, 1]
+        elif method == 'torch':
+            # PyTorch expects values in [0, 1]
             if image.max() > 1.0:
                 image = image.astype(np.float32) / 255.0
 
-            datagen = self.create_keras_generator()
-            image_expanded = np.expand_dims(image, axis=0)
-
-            # Generate augmented image
-            aug_iter = datagen.flow(image_expanded, batch_size=1)
-            augmented_image = next(aug_iter)[0]
+            transform = self.create_torch_transforms(augment=True)
+            # Convert back to numpy after transformation
+            augmented_tensor = transform((image * 255).astype(np.uint8))
+            augmented_image = augmented_tensor.permute(1, 2, 0).numpy()
 
         else:
             raise ValueError(f"Unknown augmentation method: {method}")
@@ -178,61 +196,27 @@ class DataAugmentation:
 
         return np.array(augmented_images), np.array(augmented_labels)
 
-    def create_tf_dataset(self, images: np.ndarray, labels: np.ndarray,
-                         batch_size: int = 32, shuffle: bool = True,
-                         augment: bool = True) -> tf.data.Dataset:
+    def create_pytorch_dataset(self, images: np.ndarray, labels: np.ndarray,
+                              augment: bool = True) -> 'AugmentedDataset':
         """
-        Create TensorFlow Dataset with augmentation.
+        Create PyTorch Dataset with augmentation.
 
         Args:
             images: Array of images
             labels: Array of labels
-            batch_size: Batch size
-            shuffle: Whether to shuffle data
             augment: Whether to apply augmentation
 
         Returns:
-            tf.data.Dataset
+            PyTorch Dataset
         """
-        def augment_fn(image, label):
-            """TensorFlow function for augmentation."""
-            if augment:
-                # Random rotation
-                image = tf.image.rot90(
-                    image,
-                    k=tf.random.uniform(shape=[], minval=0, maxval=4, dtype=tf.int32)
-                )
-
-                # Random flip
-                image = tf.image.random_flip_left_right(image)
-                image = tf.image.random_flip_up_down(image)
-
-                # Random brightness and contrast
-                image = tf.image.random_brightness(image, max_delta=0.2)
-                image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
-
-                # Random saturation and hue
-                image = tf.image.random_saturation(image, lower=0.8, upper=1.2)
-                image = tf.image.random_hue(image, max_delta=0.1)
-
-                # Clip values to [0, 1]
-                image = tf.clip_by_value(image, 0.0, 1.0)
-
-            return image, label
-
-        # Create dataset
-        dataset = tf.data.Dataset.from_tensor_slices((images, labels))
-
-        if shuffle:
-            dataset = dataset.shuffle(buffer_size=len(images))
-
         if augment:
-            dataset = dataset.map(augment_fn, num_parallel_calls=tf.data.AUTOTUNE)
+            transform = self.create_albumentations_pipeline()
+        else:
+            transform = None
 
-        dataset = dataset.batch(batch_size)
-        dataset = dataset.prefetch(tf.data.AUTOTUNE)
+        dataset = AugmentedDataset(images, labels, transform=transform)
 
-        logger.info(f"TensorFlow Dataset created with batch_size={batch_size}, augment={augment}")
+        logger.info(f"PyTorch Dataset created with {len(dataset)} samples, augment={augment}")
 
         return dataset
 
@@ -304,6 +288,50 @@ class DataAugmentation:
         return df
 
 
+class AugmentedDataset(Dataset):
+    """PyTorch Dataset with augmentation support."""
+
+    def __init__(self, images, labels, transform=None):
+        """
+        Initialize dataset.
+
+        Args:
+            images: numpy array of images [N, H, W, C]
+            labels: numpy array of labels
+            transform: albumentations transform
+        """
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = self.images[idx]
+        label = self.labels[idx]
+
+        # Apply augmentation if specified
+        if self.transform:
+            # Albumentations expects uint8
+            if image.max() <= 1.0:
+                image = (image * 255).astype(np.uint8)
+
+            augmented = self.transform(image=image)
+            image = augmented['image'].astype(np.float32) / 255.0
+
+        # Convert to PyTorch tensor and change format from HWC to CHW
+        image = torch.from_numpy(image).permute(2, 0, 1).float()
+
+        # Convert label to tensor
+        if isinstance(label, np.ndarray):
+            label = torch.from_numpy(label).float()
+        else:
+            label = torch.tensor(label, dtype=torch.float32)
+
+        return image, label
+
+
 def main():
     """Main function for testing."""
     # Create sample image
@@ -328,12 +356,18 @@ def main():
     print(f"\nOriginal batch size: {len(batch_images)}")
     print(f"Augmented batch size: {len(aug_images)}")
 
-    # Test TensorFlow dataset
-    dataset = augmenter.create_tf_dataset(
-        batch_images, batch_labels, batch_size=4, augment=True
+    # Test PyTorch dataset
+    dataset = augmenter.create_pytorch_dataset(
+        batch_images, batch_labels, augment=True
     )
 
-    print(f"\nTensorFlow Dataset created: {dataset}")
+    print(f"\nPyTorch Dataset created: {dataset}")
+    print(f"Dataset length: {len(dataset)}")
+
+    # Test one sample
+    img, lbl = dataset[0]
+    print(f"Sample image shape: {img.shape}")  # Should be [C, H, W]
+    print(f"Sample label: {lbl}")
 
 
 if __name__ == "__main__":
