@@ -114,12 +114,24 @@ class WeightRegression:
         Returns:
             Feature extractor model
         """
-        # Use EfficientNetB0 as backbone
-        base_model = EfficientNetB0(
-            include_top=False,
-            weights='imagenet',
-            pooling='avg'
-        )
+        # Use EfficientNetB0 as backbone (specify input_shape to avoid conflicts)
+        # WORKAROUND: Try-except for corrupted weights cache
+        try:
+            base_model = EfficientNetB0(
+                include_top=False,
+                weights='imagenet',
+                input_shape=(self.img_size, self.img_size, 3),
+                pooling='avg'
+            )
+        except (ValueError, OSError) as e:
+            logger.warning(f"Failed to load ImageNet weights: {e}")
+            logger.warning("Training without pretrained weights (this will reduce accuracy)")
+            base_model = EfficientNetB0(
+                include_top=False,
+                weights=None,
+                input_shape=(self.img_size, self.img_size, 3),
+                pooling='avg'
+            )
 
         # Freeze most layers
         base_model.trainable = True
