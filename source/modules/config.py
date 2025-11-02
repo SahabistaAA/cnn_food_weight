@@ -1,8 +1,9 @@
 """
-Configuration file for the food weight prediction pipeline (TensorFlow/Keras).
+Configuration file for the food weight prediction pipeline (PyTorch).
 """
 import os
 from pathlib import Path
+import torch
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -61,10 +62,18 @@ EARLY_STOPPING_PATIENCE = 10
 REDUCE_LR_PATIENCE = 5
 RANDOM_SEED = 42
 
-# Model save paths (Keras 3.x uses .keras extension)
-SEGMENTATION_MODEL_PATH = MODELS_DIR / "unet_segmentation.keras"
-CLASSIFICATION_MODEL_PATH = MODELS_DIR / "efficientnet_classification.keras"
-REGRESSION_MODEL_PATH = MODELS_DIR / "cnn_regression.keras"
+# PyTorch device configuration
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# PyTorch DataLoader settings
+NUM_WORKERS = 0  # Set to 0 for Windows, increase for Linux/Mac
+PIN_MEMORY = True if torch.cuda.is_available() else False
+USE_AMP = True  # Automatic Mixed Precision (for faster training on GPU)
+
+# Model save paths (PyTorch uses .pth extension)
+SEGMENTATION_MODEL_PATH = MODELS_DIR / "unet_segmentation.pth"
+CLASSIFICATION_MODEL_PATH = MODELS_DIR / "efficientnet_classification.pth"
+REGRESSION_MODEL_PATH = MODELS_DIR / "cnn_regression.pth"
 
 # Outputs
 TRAIN_VAL_TEST_SPLIT_PATH = OUTPUTS_DIR / "data_split.csv"
