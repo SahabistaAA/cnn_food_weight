@@ -60,7 +60,8 @@ class DataAugmentation:
         """
         transform = alb.Compose([
             alb.RandomRotate90(p=0.5),
-            alb.Flip(p=0.5),
+            alb.HorizontalFlip(p=0.5),
+            alb.VerticalFlip(p=0.2),
             alb.Transpose(p=0.3),
 
             # Optical distortions
