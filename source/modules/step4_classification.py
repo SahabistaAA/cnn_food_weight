@@ -45,22 +45,33 @@ class FoodClassification:
         Returns:
             Keras model
         """
-        # Input layer
-        inputs = layers.Input(shape=(self.img_size, self.img_size, 3))
-
-        # Load EfficientNetB0 as base model
-        base_model = EfficientNetB0(
-            include_top=False,
-            weights='imagenet' if self.pretrained else None,
-            input_tensor=inputs,
-            pooling='avg'
-        )
+        # Load EfficientNetB0 as base model (without input_tensor to avoid shape conflicts)
+        # WORKAROUND: Try-except for corrupted weights cache
+        try:
+            base_model = EfficientNetB0(
+                include_top=False,
+                weights='imagenet' if self.pretrained else None,
+                input_shape=(self.img_size, self.img_size, 3),
+                pooling='avg'
+            )
+        except (ValueError, OSError) as e:
+            logger.warning(f"Failed to load ImageNet weights: {e}")
+            logger.warning("Training without pretrained weights (this will reduce accuracy)")
+            base_model = EfficientNetB0(
+                include_top=False,
+                weights=None,
+                input_shape=(self.img_size, self.img_size, 3),
+                pooling='avg'
+            )
+            self.pretrained = False
 
         # Freeze base model initially for transfer learning
         base_model.trainable = False
 
-        # Build classification head
-        x = base_model.output
+        # Build complete model
+        inputs = layers.Input(shape=(self.img_size, self.img_size, 3))
+        x = base_model(inputs, training=False)
+
         x = layers.BatchNormalization()(x)
         x = layers.Dropout(0.5)(x)
 
@@ -91,7 +102,7 @@ class FoodClassification:
         self.model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
             loss='sparse_categorical_crossentropy',
-            metrics=['accuracy', keras.metrics.TopKCategoricalAccuracy(k=5, name='top5_accuracy')]
+            metrics=['accuracy', keras.metrics.SparseTopKCategoricalAccuracy(k=5, name='top5_accuracy')]
         )
 
         logger.info("Classification model compiled successfully")
@@ -117,7 +128,7 @@ class FoodClassification:
         self.model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=1e-5),
             loss='sparse_categorical_crossentropy',
-            metrics=['accuracy', keras.metrics.TopKCategoricalAccuracy(k=5, name='top5_accuracy')]
+            metrics=['accuracy', keras.metrics.SparseTopKCategoricalAccuracy(k=5, name='top5_accuracy')]
         )
 
         logger.info(f"Unfroze last {num_layers_to_unfreeze} layers for fine-tuning")
