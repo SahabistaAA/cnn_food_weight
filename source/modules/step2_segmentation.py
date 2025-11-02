@@ -1,15 +1,16 @@
 """
-Step 2: U-Net Image Segmentation
+Step 2: U-Net Image Segmentation (PyTorch Implementation)
 Implements U-Net for segmenting food from background.
 """
 import numpy as np
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 import cv2
 from pathlib import Path
 import pandas as pd
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 import logging
 import config
 
@@ -17,108 +18,178 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+class UNetModel(nn.Module):
+    """U-Net architecture for image segmentation."""
+
+    def __init__(self, in_channels=3, out_channels=1, filters=[64, 128, 256, 512, 1024]):
+        """
+        Initialize U-Net model.
+
+        Args:
+            in_channels: Number of input channels (3 for RGB)
+            out_channels: Number of output channels (1 for binary segmentation)
+            filters: List of filter sizes for each layer
+        """
+        super(UNetModel, self).__init__()
+        self.filters = filters
+
+        # Encoder (downsampling path)
+        self.encoders = nn.ModuleList()
+        self.pools = nn.ModuleList()
+
+        in_ch = in_channels
+        for num_filters in filters[:-1]:
+            self.encoders.append(self._conv_block(in_ch, num_filters))
+            self.pools.append(nn.MaxPool2d(kernel_size=2, stride=2))
+            in_ch = num_filters
+
+        # Bottleneck
+        self.bottleneck = self._conv_block(filters[-2], filters[-1])
+
+        # Decoder (upsampling path)
+        self.upconvs = nn.ModuleList()
+        self.decoders = nn.ModuleList()
+
+        for i in range(len(filters) - 1):
+            idx = len(filters) - i - 1
+            self.upconvs.append(
+                nn.ConvTranspose2d(filters[idx], filters[idx-1], kernel_size=2, stride=2)
+            )
+            self.decoders.append(self._conv_block(filters[idx], filters[idx-1]))
+
+        # Output layer
+        self.output = nn.Conv2d(filters[0], out_channels, kernel_size=1)
+        self.sigmoid = nn.Sigmoid()
+
+    def _conv_block(self, in_channels, out_channels):
+        """Create a convolutional block with two conv layers."""
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(0.3)
+        )
+
+    def forward(self, x):
+        """Forward pass through U-Net."""
+        # Encoder
+        skip_connections = []
+        for encoder, pool in zip(self.encoders, self.pools):
+            x = encoder(x)
+            skip_connections.append(x)
+            x = pool(x)
+
+        # Bottleneck
+        x = self.bottleneck(x)
+
+        # Decoder
+        skip_connections = skip_connections[::-1]
+        for i, (upconv, decoder) in enumerate(zip(self.upconvs, self.decoders)):
+            x = upconv(x)
+            skip = skip_connections[i]
+
+            # Handle size mismatch
+            if x.shape != skip.shape:
+                x = nn.functional.interpolate(x, size=skip.shape[2:], mode='bilinear', align_corners=True)
+
+            x = torch.cat([x, skip], dim=1)
+            x = decoder(x)
+
+        # Output
+        x = self.output(x)
+        x = self.sigmoid(x)
+
+        return x
+
+
+class SegmentationDataset(Dataset):
+    """PyTorch Dataset for segmentation."""
+
+    def __init__(self, images, masks):
+        """
+        Initialize dataset.
+
+        Args:
+            images: numpy array of images [N, H, W, C]
+            masks: numpy array of masks [N, H, W, 1]
+        """
+        self.images = images
+        self.masks = masks
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = self.images[idx]
+        mask = self.masks[idx]
+
+        # Convert to PyTorch tensors and change format from HWC to CHW
+        image = torch.from_numpy(image).permute(2, 0, 1).float()
+        mask = torch.from_numpy(mask).permute(2, 0, 1).float()
+
+        return image, mask
+
+
 class UNetSegmentation:
     """U-Net model for food image segmentation."""
 
     def __init__(self, img_size: int = config.SEGMENTATION_IMG_SIZE,
-                 filters: List[int] = config.UNET_FILTERS):
+                 filters: List[int] = config.UNET_FILTERS,
+                 device: str = None):
         """
         Initialize U-Net segmentation model.
 
         Args:
             img_size: Input image size (square)
             filters: List of filter sizes for each layer
+            device: Device to use ('cuda' or 'cpu')
         """
         self.img_size = img_size
         self.filters = filters
+        self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None
 
-    def build_unet(self) -> keras.Model:
+        logger.info(f"Using device: {self.device}")
+
+    def build_unet(self) -> UNetModel:
         """
         Build U-Net architecture.
 
         Returns:
-            Keras model
+            PyTorch model
         """
-        inputs = layers.Input(shape=(self.img_size, self.img_size, 3))
+        model = UNetModel(in_channels=3, out_channels=1, filters=self.filters)
+        model = model.to(self.device)
 
-        # Encoder (downsampling path)
-        skip_connections = []
-        x = inputs
-
-        for i, num_filters in enumerate(self.filters[:-1]):
-            # Convolutional block
-            x = layers.Conv2D(num_filters, 3, padding='same', activation='relu')(x)
-            x = layers.Conv2D(num_filters, 3, padding='same', activation='relu')(x)
-            x = layers.BatchNormalization()(x)
-
-            skip_connections.append(x)
-
-            # Downsampling
-            x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-            x = layers.Dropout(0.3)(x)
-
-        # Bottleneck
-        x = layers.Conv2D(self.filters[-1], 3, padding='same', activation='relu')(x)
-        x = layers.Conv2D(self.filters[-1], 3, padding='same', activation='relu')(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dropout(0.3)(x)
-
-        # Decoder (upsampling path)
-        for i, num_filters in enumerate(reversed(self.filters[:-1])):
-            # Upsampling
-            x = layers.Conv2DTranspose(num_filters, 2, strides=2, padding='same')(x)
-
-            # Concatenate with skip connection
-            skip = skip_connections[-(i + 1)]
-            x = layers.Concatenate()([x, skip])
-
-            # Convolutional block
-            x = layers.Conv2D(num_filters, 3, padding='same', activation='relu')(x)
-            x = layers.Conv2D(num_filters, 3, padding='same', activation='relu')(x)
-            x = layers.BatchNormalization()(x)
-            x = layers.Dropout(0.3)(x)
-
-        # Output layer (binary segmentation: food vs background)
-        outputs = layers.Conv2D(1, 1, activation='sigmoid', padding='same')(x)
-
-        model = keras.Model(inputs=inputs, outputs=outputs, name='UNet_Segmentation')
+        # Count parameters
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
         logger.info(f"U-Net model built with input size: {self.img_size}x{self.img_size}")
+        logger.info(f"Total parameters: {total_params:,}")
+        logger.info(f"Trainable parameters: {trainable_params:,}")
 
         return model
 
-    def compile_model(self, learning_rate: float = 0.001):
-        """Compile the U-Net model."""
-        if self.model is None:
-            self.model = self.build_unet()
-
-        self.model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-            loss='binary_crossentropy',
-            metrics=['accuracy', keras.metrics.MeanIoU(num_classes=2)]
-        )
-
-        logger.info("U-Net model compiled successfully")
-
-    def dice_coefficient(self, y_true, y_pred, smooth=1):
+    def dice_coefficient(self, y_pred, y_true, smooth=1):
         """
         Dice coefficient for evaluating segmentation quality.
 
         Args:
-            y_true: Ground truth masks
             y_pred: Predicted masks
+            y_true: Ground truth masks
             smooth: Smoothing factor
 
         Returns:
             Dice coefficient
         """
-        y_true_f = tf.keras.backend.flatten(y_true)
-        y_pred_f = tf.keras.backend.flatten(y_pred)
-        intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
-        return (2. * intersection + smooth) / (
-            tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth
-        )
+        y_pred_f = y_pred.flatten()
+        y_true_f = y_true.flatten()
+        intersection = (y_pred_f * y_true_f).sum()
+        return (2. * intersection + smooth) / (y_pred_f.sum() + y_true_f.sum() + smooth)
 
     def create_pseudo_masks(self, images: np.ndarray, method: str = 'otsu') -> np.ndarray:
         """
@@ -219,7 +290,7 @@ class UNetSegmentation:
         return np.array(images)
 
     def train(self, train_df: pd.DataFrame, val_df: pd.DataFrame,
-              epochs: int = 30, batch_size: int = 16):
+              epochs: int = 30, batch_size: int = 16, learning_rate: float = 0.001):
         """
         Train the U-Net model.
 
@@ -228,6 +299,10 @@ class UNetSegmentation:
             val_df: Validation dataframe
             epochs: Number of training epochs
             batch_size: Batch size
+            learning_rate: Learning rate
+
+        Returns:
+            Training history dictionary
         """
         logger.info("Loading and preprocessing training images...")
 
@@ -251,48 +326,119 @@ class UNetSegmentation:
         logger.info(f"Training images: {train_images.shape}")
         logger.info(f"Training masks: {train_masks.shape}")
 
-        # Compile model if not already compiled
+        # Create datasets and dataloaders
+        train_dataset = SegmentationDataset(train_images, train_masks)
+        val_dataset = SegmentationDataset(val_images, val_masks)
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+
+        # Build model if not already built
         if self.model is None:
-            self.compile_model()
+            self.model = self.build_unet()
 
-        # Callbacks
-        callbacks = [
-            keras.callbacks.ModelCheckpoint(
-                config.SEGMENTATION_MODEL_PATH,
-                save_best_only=True,
-                monitor='val_loss',
-                verbose=1
-            ),
-            keras.callbacks.EarlyStopping(
-                monitor='val_loss',
-                patience=config.EARLY_STOPPING_PATIENCE,
-                restore_best_weights=True,
-                verbose=1
-            ),
-            keras.callbacks.ReduceLROnPlateau(
-                monitor='val_loss',
-                factor=0.5,
-                patience=config.REDUCE_LR_PATIENCE,
-                verbose=1,
-                min_lr=1e-7
-            )
-        ]
+        # Loss function and optimizer
+        criterion = nn.BCELoss()
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=config.REDUCE_LR_PATIENCE, verbose=True
+        )
 
-        # Train model
+        # Training history
+        history = {
+            'loss': [],
+            'val_loss': [],
+            'dice': [],
+            'val_dice': []
+        }
+
+        best_val_loss = float('inf')
+        patience_counter = 0
+
         logger.info("Starting U-Net training...")
 
-        history = self.model.fit(
-            train_images, train_masks,
-            validation_data=(val_images, val_masks),
-            epochs=epochs,
-            batch_size=batch_size,
-            callbacks=callbacks,
-            verbose=1
-        )
+        for epoch in range(epochs):
+            # Training phase
+            self.model.train()
+            train_loss = 0.0
+            train_dice = 0.0
+
+            for batch_idx, (images, masks) in enumerate(train_loader):
+                images = images.to(self.device)
+                masks = masks.to(self.device)
+
+                # Forward pass
+                optimizer.zero_grad()
+                outputs = self.model(images)
+                loss = criterion(outputs, masks)
+
+                # Backward pass
+                loss.backward()
+                optimizer.step()
+
+                train_loss += loss.item()
+                train_dice += self.dice_coefficient(outputs, masks).item()
+
+            train_loss /= len(train_loader)
+            train_dice /= len(train_loader)
+
+            # Validation phase
+            self.model.eval()
+            val_loss = 0.0
+            val_dice = 0.0
+
+            with torch.no_grad():
+                for images, masks in val_loader:
+                    images = images.to(self.device)
+                    masks = masks.to(self.device)
+
+                    outputs = self.model(images)
+                    loss = criterion(outputs, masks)
+
+                    val_loss += loss.item()
+                    val_dice += self.dice_coefficient(outputs, masks).item()
+
+            val_loss /= len(val_loader)
+            val_dice /= len(val_loader)
+
+            # Update history
+            history['loss'].append(train_loss)
+            history['val_loss'].append(val_loss)
+            history['dice'].append(train_dice)
+            history['val_dice'].append(val_dice)
+
+            # Learning rate scheduling
+            scheduler.step(val_loss)
+
+            # Logging
+            logger.info(
+                f"Epoch [{epoch+1}/{epochs}] "
+                f"Train Loss: {train_loss:.4f}, Train Dice: {train_dice:.4f}, "
+                f"Val Loss: {val_loss:.4f}, Val Dice: {val_dice:.4f}"
+            )
+
+            # Model checkpoint
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                self.save_model()
+                patience_counter = 0
+                logger.info(f"Model saved with val_loss: {val_loss:.4f}")
+            else:
+                patience_counter += 1
+
+            # Early stopping
+            if patience_counter >= config.EARLY_STOPPING_PATIENCE:
+                logger.info(f"Early stopping triggered after epoch {epoch+1}")
+                break
 
         logger.info("U-Net training completed!")
 
-        return history
+        # Create history object similar to Keras
+        class TrainingHistory:
+            def __init__(self, history_dict):
+                self.history = history_dict
+
+        return TrainingHistory(history)
 
     def predict_masks(self, image_paths: List[str]) -> np.ndarray:
         """
@@ -305,8 +451,18 @@ class UNetSegmentation:
             Predicted masks [N, H, W, 1]
         """
         images = self.load_and_preprocess_images(image_paths)
-        masks = self.model.predict(images, verbose=0)
-        return masks
+
+        # Convert to tensor and move to device
+        images_tensor = torch.from_numpy(images).permute(0, 3, 1, 2).float().to(self.device)
+
+        self.model.eval()
+        with torch.no_grad():
+            masks = self.model(images_tensor)
+
+        # Convert back to numpy [N, H, W, 1]
+        masks_np = masks.permute(0, 2, 3, 1).cpu().numpy()
+
+        return masks_np
 
     def apply_mask_to_image(self, image: np.ndarray, mask: np.ndarray,
                            threshold: float = 0.5) -> np.ndarray:
@@ -328,12 +484,23 @@ class UNetSegmentation:
     def save_model(self, path: Path = config.SEGMENTATION_MODEL_PATH):
         """Save the trained model."""
         if self.model is not None:
-            self.model.save(path)
+            torch.save({
+                'model_state_dict': self.model.state_dict(),
+                'img_size': self.img_size,
+                'filters': self.filters
+            }, path)
             logger.info(f"Model saved to: {path}")
 
     def load_model(self, path: Path = config.SEGMENTATION_MODEL_PATH):
         """Load a trained model."""
-        self.model = keras.models.load_model(path)
+        checkpoint = torch.load(path, map_location=self.device)
+
+        if self.model is None:
+            self.model = self.build_unet()
+
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.eval()
+
         logger.info(f"Model loaded from: {path}")
 
 
