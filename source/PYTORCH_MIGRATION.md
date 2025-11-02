@@ -1,10 +1,26 @@
-# PyTorch Migration Guide
+# PyTorch Migration - In Progress
 
-This document provides the complete migration from TensorFlow to PyTorch for the Food Weight Prediction pipeline.
+**Date:** 2025-11-02
+**Status:** ⚠️ PARTIAL MIGRATION (2/5 modules complete)
 
-## Overview
+---
 
-All models have been converted from TensorFlow/Keras to PyTorch for better flexibility, performance, and ecosystem support.
+## Summary
+
+Migration from TensorFlow/Keras to PyTorch for the food weight prediction pipeline.
+
+### ✅ Completed Modules
+
+1. **step2_segmentation.py** - U-Net segmentation
+2. **step3_augmentation.py** - Data augmentation
+
+### ⏳ Pending Modules
+
+3. **step4_classification.py** - EfficientNet classification
+4. **step5_regression.py** - Weight regression
+5. **main.py** - Pipeline orchestration
+6. **config.py** - Configuration updates
+7. **test files** - Unit/integration tests
 
 ## Installation
 
