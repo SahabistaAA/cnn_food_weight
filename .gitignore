@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Model files (large)
+source/models/*.h5
+source/models/*.pkl
+source/models/*.json
+
+# Output files
+source/outputs/logs/
+source/outputs/*.log
+source/outputs/segmentation_results/
+source/outputs/metrics/
+source/outputs/pipeline_results_*.json
+source/outputs/test_results_*.json
+
+# Dataset (optional - uncomment if you don't want to track data)
+# source/data/leftover_dataset/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# TensorBoard
+events.out.tfevents.*
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Environment
+.env
+.env.local
