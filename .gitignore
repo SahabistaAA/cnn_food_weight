@@ -34,9 +34,12 @@ wheels/
 .vscode/
 
 # Model files (large)
-source/models/*.h5
-source/models/*.pkl
-source/models/*.json
+source/models/*.h5        # TensorFlow/Keras models (old format)
+source/models/*.keras     # TensorFlow/Keras models (Keras 3.x format)
+source/models/*.pth       # PyTorch models
+source/models/*.pt        # PyTorch models (alternative extension)
+source/models/*.pkl       # Label encoders, etc.
+source/models/*.json      # Model configs
 
 # Output files
 source/outputs/logs/
@@ -71,3 +74,22 @@ htmlcov/
 # Environment
 .env
 .env.local
+
+# Document
+!source/README.md
+!source/QUICKSTART.md
+!source/PROJECT_SUMMARY.md
+source/*.md
+source/PYTORCH_MIGRATION.md
+
+# Requirements
+!requirements.txt
+requirements*
+
+
+# Others
+source/outputs
+source/models/*.pkl
+source/models/*.keras
+
+source/__pycache__
