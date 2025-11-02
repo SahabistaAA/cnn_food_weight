@@ -141,27 +141,66 @@ class FoodDataReader:
         assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-5, \
             "Ratios must sum to 1.0"
 
+        # Check class distribution
+        class_counts = df['food_category_id'].value_counts()
+        min_samples = class_counts.min()
+
+        logger.info(f"Class distribution: min={min_samples}, max={class_counts.max()}, "
+                   f"unique_classes={len(class_counts)}")
+
+        # Filter out classes with too few samples for stratification
+        # Need at least 2 samples per class for stratification
+        valid_classes = class_counts[class_counts >= 2].index
+        classes_to_remove = class_counts[class_counts < 2].index
+
+        if len(classes_to_remove) > 0:
+            logger.warning(f"Removing {len(classes_to_remove)} classes with only 1 sample: "
+                          f"{classes_to_remove.tolist()}")
+            df_filtered = df[df['food_category_id'].isin(valid_classes)].copy()
+            logger.info(f"Filtered dataset: {len(df_filtered)}/{len(df)} samples remaining")
+        else:
+            df_filtered = df.copy()
+
+        # Determine if we can use stratification
+        # Need at least 2 samples per class for stratified split
+        can_stratify = df_filtered['food_category_id'].value_counts().min() >= 2
+
+        if can_stratify:
+            logger.info("Using stratified split by food category")
+            stratify_col = df_filtered['food_category_id']
+        else:
+            logger.warning("Cannot use stratified split - some classes have too few samples")
+            logger.warning("Using random split instead")
+            stratify_col = None
+
         # First split: separate out test set
         train_val_df, test_df = train_test_split(
-            df,
+            df_filtered,
             test_size=test_ratio,
             random_state=random_state,
-            stratify=df['food_category_id']  # Stratify by food category
+            stratify=stratify_col
         )
 
         # Second split: separate train and validation
         val_size_adjusted = val_ratio / (train_ratio + val_ratio)
+
+        # Re-check if we can stratify for second split
+        if can_stratify and train_val_df['food_category_id'].value_counts().min() >= 2:
+            stratify_col_2 = train_val_df['food_category_id']
+        else:
+            stratify_col_2 = None
+
         train_df, val_df = train_test_split(
             train_val_df,
             test_size=val_size_adjusted,
             random_state=random_state,
-            stratify=train_val_df['food_category_id']
+            stratify=stratify_col_2
         )
 
         logger.info(f"Data split - Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
-        logger.info(f"Percentages - Train: {len(train_df)/len(df)*100:.1f}%, "
-                   f"Val: {len(val_df)/len(df)*100:.1f}%, "
-                   f"Test: {len(test_df)/len(df)*100:.1f}%")
+        logger.info(f"Percentages - Train: {len(train_df)/len(df_filtered)*100:.1f}%, "
+                   f"Val: {len(val_df)/len(df_filtered)*100:.1f}%, "
+                   f"Test: {len(test_df)/len(df_filtered)*100:.1f}%")
 
         # Add split column
         train_df['split'] = 'train'
