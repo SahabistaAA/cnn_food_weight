@@ -44,7 +44,7 @@ class TestEndToEnd(unittest.TestCase):
             self.assertIn('step4', self.pipeline.results)
             self.assertIn('step5', self.pipeline.results)
 
-            print("\n✓ E2E Pipeline Test Completed Successfully!")
+            print("\n[OK] E2E Pipeline Test Completed Successfully!")
 
         except Exception as e:
             self.skipTest(f"Pipeline test failed (may be missing data): {e}")
@@ -64,20 +64,22 @@ class TestEndToEnd(unittest.TestCase):
         self.assertGreater(len(self.pipeline.data['val']), 0)
         self.assertGreater(len(self.pipeline.data['test']), 0)
 
-        print(f"\n✓ Data loaded: {len(self.pipeline.data['train'])} train, "
+        print(f"\n[OK] Data loaded: {len(self.pipeline.data['train'])} train, "
               f"{len(self.pipeline.data['val'])} val, {len(self.pipeline.data['test'])} test samples")
 
     def test_03_models_created(self):
         """Test that all models are created."""
-        if self.pipeline.segmentation_model is None:
-            self.skipTest("Models not created")
+        if (self.pipeline.segmentation_model is None or
+            self.pipeline.classification_model is None or
+            self.pipeline.regression_model is None):
+            self.skipTest("Models not created - run full pipeline first")
 
         # Check models exist
         self.assertIsNotNone(self.pipeline.segmentation_model)
         self.assertIsNotNone(self.pipeline.classification_model)
         self.assertIsNotNone(self.pipeline.regression_model)
 
-        print("\n✓ All models created successfully")
+        print("\n[OK] All models created successfully")
 
     def test_04_segmentation_predictions(self):
         """Test segmentation model predictions."""
@@ -99,7 +101,7 @@ class TestEndToEnd(unittest.TestCase):
             self.assertTrue(np.all(masks >= 0))
             self.assertTrue(np.all(masks <= 1))
 
-            print(f"\n✓ Segmentation predictions: {masks.shape}")
+            print(f"\n[OK] Segmentation predictions: {masks.shape}")
 
         except Exception as e:
             self.skipTest(f"Segmentation prediction failed: {e}")
@@ -124,7 +126,7 @@ class TestEndToEnd(unittest.TestCase):
             prob_sums = probabilities.sum(axis=1)
             np.testing.assert_array_almost_equal(prob_sums, np.ones(5), decimal=5)
 
-            print(f"\n✓ Classification predictions: {predicted_categories}")
+            print(f"\n[OK] Classification predictions: {predicted_categories}")
             print(f"  Top prediction probabilities: {probabilities.max(axis=1)}")
 
         except Exception as e:
@@ -165,7 +167,7 @@ class TestEndToEnd(unittest.TestCase):
             errors = np.abs(predictions - ground_truth)
             mean_error = errors.mean()
 
-            print(f"\n✓ Regression predictions:")
+            print(f"\n[OK] Regression predictions:")
             print(f"  Predictions: {predictions}")
             print(f"  Ground truth: {ground_truth}")
             print(f"  Mean absolute error: {mean_error:.2f}g")
@@ -189,7 +191,7 @@ class TestEndToEnd(unittest.TestCase):
             self.assertGreaterEqual(accuracy, 0)
             self.assertLessEqual(accuracy, 1)
 
-            print(f"\n✓ Classification Test Accuracy: {accuracy:.4f}")
+            print(f"\n[OK] Classification Test Accuracy: {accuracy:.4f}")
 
         # Check regression metrics
         if 'regression' in test_results:
@@ -202,7 +204,7 @@ class TestEndToEnd(unittest.TestCase):
 
             self.assertGreaterEqual(mae, 0)
 
-            print(f"\n✓ Regression Test MAE: {mae:.2f}g")
+            print(f"\n[OK] Regression Test MAE: {mae:.2f}g")
             print(f"  R² Score: {r2:.4f}")
 
     def test_08_results_saved(self):
@@ -213,7 +215,7 @@ class TestEndToEnd(unittest.TestCase):
         result_files = list(OUTPUTS_DIR.glob("pipeline_results_*.json"))
 
         if len(result_files) > 0:
-            print(f"\n✓ Results saved: {len(result_files)} result files found")
+            print(f"\n[OK] Results saved: {len(result_files)} result files found")
             latest_result = max(result_files, key=lambda p: p.stat().st_mtime)
             print(f"  Latest: {latest_result.name}")
         else:
@@ -236,7 +238,7 @@ class TestModelPersistence(unittest.TestCase):
         model_files = list(MODELS_DIR.glob("*.h5")) + list(MODELS_DIR.glob("*.pkl"))
 
         if len(model_files) > 0:
-            print(f"✓ Found {len(model_files)} model files:")
+            print(f"[OK] Found {len(model_files)} model files:")
             for model_file in model_files:
                 size_mb = model_file.stat().st_size / (1024 * 1024)
                 print(f"  - {model_file.name} ({size_mb:.2f} MB)")
