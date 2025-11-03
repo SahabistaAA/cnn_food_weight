@@ -338,7 +338,7 @@ class UNetSegmentation:
         criterion = nn.BCELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=config.REDUCE_LR_PATIENCE, verbose=True
+            optimizer, mode='min', factor=0.5, patience=config.REDUCE_LR_PATIENCE
         )
 
         # Training history

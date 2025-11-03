@@ -463,7 +463,7 @@ class FoodClassification:
 
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode='min', factor=0.5,
-            patience=config.REDUCE_LR_PATIENCE, verbose=True
+            patience=config.REDUCE_LR_PATIENCE
         )
 
         best_val_acc = 0.0
@@ -522,7 +522,7 @@ class FoodClassification:
             # Use lower learning rate for fine-tuning
             optimizer = optim.Adam(self.model.parameters(), lr=1e-5)
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, mode='min', factor=0.5, patience=3, verbose=True
+                optimizer, mode='min', factor=0.5, patience=3
             )
 
             best_val_acc = 0.0
