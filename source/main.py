@@ -5,9 +5,9 @@ Orchestrates all 5 steps: data reading, segmentation, augmentation, classificati
 import sys
 from pathlib import Path
 import argparse
-import logging
 import json
 from datetime import datetime
+from loguru import logger
 
 # Add modules directory to path
 sys.path.insert(0, str(Path(__file__).parent / 'modules'))
@@ -19,16 +19,14 @@ from modules.step3_augmentation import DataAugmentation
 from modules.step4_classification import FoodClassification
 from modules.step5_regression import WeightRegression
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(OUTPUTS_DIR / 'pipeline.log'),
-        logging.StreamHandler()
-    ]
+# Setup loguru logging
+logger.add(
+    OUTPUTS_DIR / 'pipeline.log',
+    rotation="10 MB",
+    retention="7 days",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
 )
-logger = logging.getLogger(__name__)
 
 
 class FoodWeightPredictionPipeline:

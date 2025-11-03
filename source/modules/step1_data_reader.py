@@ -7,11 +7,8 @@ import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from typing import Tuple, Dict
-import logging
+from loguru import logger
 import config
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class FoodDataReader:

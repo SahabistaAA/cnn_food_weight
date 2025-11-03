@@ -67,15 +67,24 @@ class TestSegmentation(unittest.TestCase):
     """Unit tests for segmentation module."""
 
     def test_unet_build(self):
-        """Test U-Net model building."""
-        model = UNetSegmentation(img_size=128, filters=[32, 64, 128])
-        unet = model.build_unet()
+        """Test U-Net model building (PyTorch)."""
+        import torch
+        segmenter = UNetSegmentation(img_size=128, filters=[32, 64, 128])
 
-        # Check input shape
-        self.assertEqual(unet.input_shape, (None, 128, 128, 3))
+        # Build model
+        unet_model = segmenter.build_unet()
 
-        # Check output shape
-        self.assertEqual(unet.output_shape, (None, 128, 128, 1))
+        # Check model exists
+        self.assertIsNotNone(unet_model)
+
+        # Test forward pass
+        unet_model.eval()
+        with torch.no_grad():
+            dummy_input = torch.randn(1, 3, 128, 128)
+            output = unet_model(dummy_input)
+
+        # Check output shape [B, C, H, W]
+        self.assertEqual(output.shape, (1, 1, 128, 128))
 
     def test_create_pseudo_masks(self):
         """Test pseudo mask creation."""
@@ -160,15 +169,22 @@ class TestClassification(unittest.TestCase):
     """Unit tests for classification module."""
 
     def test_efficientnet_build(self):
-        """Test EfficientNet model building."""
+        """Test EfficientNet model building (PyTorch)."""
+        import torch
         model = FoodClassification(num_classes=10, img_size=224, pretrained=False)
-        efficientnet = model.build_efficientnet()
 
-        # Check input shape
-        self.assertEqual(efficientnet.input_shape, (None, 224, 224, 3))
+        # Build model
+        model.build_model()
 
-        # Check output shape
-        self.assertEqual(efficientnet.output_shape, (None, 10))
+        # Check model exists
+        self.assertIsNotNone(model.model)
+
+        # Test forward pass
+        dummy_input = torch.randn(2, 3, 224, 224)
+        output = model.model(dummy_input)
+
+        # Check output shape [B, num_classes]
+        self.assertEqual(output.shape, (2, 10))
 
     def test_prepare_labels(self):
         """Test label encoding."""
@@ -207,28 +223,41 @@ class TestRegression(unittest.TestCase):
     """Unit tests for regression module."""
 
     def test_cnn_regression_single_input_build(self):
-        """Test CNN regression model building (single input)."""
+        """Test CNN regression model building (single input, PyTorch)."""
+        import torch
         model = WeightRegression(img_size=224, use_dual_input=False)
-        cnn = model.build_cnn_regression()
 
-        # Check input shape
-        self.assertEqual(cnn.input_shape, (None, 224, 224, 3))
+        # Build model
+        model.build_model(pretrained=False)
 
-        # Check output shape
-        self.assertEqual(cnn.output_shape, (None, 1))
+        # Check model exists
+        self.assertIsNotNone(model.model)
+
+        # Test forward pass
+        dummy_input = torch.randn(2, 3, 224, 224)
+        output = model.model(dummy_input)
+
+        # Check output shape [B, 1]
+        self.assertEqual(output.shape, (2, 1))
 
     def test_cnn_regression_dual_input_build(self):
-        """Test CNN regression model building (dual input)."""
+        """Test CNN regression model building (dual input, PyTorch)."""
+        import torch
         model = WeightRegression(img_size=224, use_dual_input=True)
-        cnn = model.build_cnn_regression()
 
-        # Check input shapes
-        self.assertEqual(len(cnn.input_shape), 2)
-        self.assertEqual(cnn.input_shape[0], (None, 224, 224, 3))
-        self.assertEqual(cnn.input_shape[1], (None, 224, 224, 3))
+        # Build model
+        model.build_model(pretrained=False)
 
-        # Check output shape
-        self.assertEqual(cnn.output_shape, (None, 1))
+        # Check model exists
+        self.assertIsNotNone(model.model)
+
+        # Test forward pass
+        dummy_before = torch.randn(2, 3, 224, 224)
+        dummy_after = torch.randn(2, 3, 224, 224)
+        output = model.model(dummy_before, dummy_after)
+
+        # Check output shape [B, 1]
+        self.assertEqual(output.shape, (2, 1))
 
     def test_normalize_denormalize_weights(self):
         """Test weight normalization and denormalization."""

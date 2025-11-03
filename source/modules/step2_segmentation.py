@@ -11,11 +11,8 @@ import cv2
 from pathlib import Path
 import pandas as pd
 from typing import Tuple, List, Dict
-import logging
+from loguru import logger
 import config
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class UNetModel(nn.Module):

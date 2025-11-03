@@ -13,11 +13,8 @@ from pathlib import Path
 import pandas as pd
 from typing import Tuple, List, Dict, Optional
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-import logging
+from loguru import logger
 import config
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class DualInputRegressionModel(nn.Module):

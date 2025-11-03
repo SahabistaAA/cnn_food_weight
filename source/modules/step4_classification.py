@@ -13,11 +13,8 @@ from pathlib import Path
 import pandas as pd
 from typing import Tuple, List, Dict
 from sklearn.preprocessing import LabelEncoder
-import logging
+from loguru import logger
 import config
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class EfficientNetClassifier(nn.Module):

@@ -10,13 +10,10 @@ import cv2
 from pathlib import Path
 import pandas as pd
 from typing import Tuple, List, Dict
-import logging
+from loguru import logger
 import albumentations as alb
 from albumentations.pytorch import ToTensorV2
 import config
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class DataAugmentation:
