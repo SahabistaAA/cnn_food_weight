@@ -100,13 +100,15 @@ class FoodWeightPredictionPipeline:
         self.results['step2'] = {
             'final_train_loss': float(history.history['loss'][-1]),
             'final_val_loss': float(history.history['val_loss'][-1]),
-            'final_train_accuracy': float(history.history['accuracy'][-1]),
-            'final_val_accuracy': float(history.history['val_accuracy'][-1])
+            'final_train_dice': float(history.history['dice'][-1]),
+            'final_val_dice': float(history.history['val_dice'][-1])
         }
 
         logger.info(f"\nSegmentation training completed!")
         logger.info(f"  - Final training loss: {self.results['step2']['final_train_loss']:.4f}")
         logger.info(f"  - Final validation loss: {self.results['step2']['final_val_loss']:.4f}")
+        logger.info(f"  - Final training Dice: {self.results['step2']['final_train_dice']:.4f}")
+        logger.info(f"  - Final validation Dice: {self.results['step2']['final_val_dice']:.4f}")
 
     def step3_setup_augmentation(self):
         """Step 3: Setup data augmentation."""
