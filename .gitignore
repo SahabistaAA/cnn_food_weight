@@ -95,4 +95,3 @@ source/models/*.keras
 source/__pycache__
 
 outputs
-models
