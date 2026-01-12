@@ -8,7 +8,12 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from typing import Tuple, Dict
 from loguru import logger
-import config
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from source.config import config
 
 
 class FoodDataReader:
