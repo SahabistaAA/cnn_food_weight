@@ -14,7 +14,12 @@ import pandas as pd
 from typing import Tuple, List, Dict
 from sklearn.preprocessing import LabelEncoder
 from loguru import logger
-import config
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from source.config import config
 
 
 class EfficientNetClassifier(nn.Module):

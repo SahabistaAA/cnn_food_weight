@@ -13,7 +13,12 @@ from typing import Tuple, List, Dict
 from loguru import logger
 import albumentations as alb
 from albumentations.pytorch import ToTensorV2
-import config
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from source.config import config
 
 
 class DataAugmentation:
