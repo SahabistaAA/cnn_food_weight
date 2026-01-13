@@ -2,19 +2,17 @@
 Step 3: Data Augmentation (PyTorch Implementation)
 Implements various augmentation techniques to increase dataset diversity.
 """
+import sys
+from pathlib import Path
+from typing import Tuple
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as T
-import cv2
-from pathlib import Path
 import pandas as pd
-from typing import Tuple, List, Dict
 from loguru import logger
 import albumentations as alb
-from albumentations.pytorch import ToTensorV2
-import sys
-from pathlib import Path
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -24,7 +22,7 @@ from source.config import config
 class DataAugmentation:
     """Handles data augmentation for training images."""
 
-    def __init__(self, augmentation_params: Dict = None):
+    def __init__(self, augmentation_params=None):
         """
         Initialize data augmentation.
 
@@ -125,8 +123,8 @@ class DataAugmentation:
 
             # Quality degradation (simulates different camera conditions)
             alb.OneOf([
-                alb.ImageCompression(quality_lower=75, quality_upper=100, p=0.3),
-                alb.Downscale(scale_min=0.7, scale_max=0.9, p=0.3),
+                alb.ImageCompression(quality_range=(75, 100), p=0.3),
+                alb.Downscale(scale_range=(0.7, 0.9), p=0.3),
             ], p=0.2),
         ])
 
@@ -255,7 +253,7 @@ class DataAugmentation:
         return grid
 
     def balance_dataset_with_augmentation(self, df: pd.DataFrame,
-                                         target_samples_per_class: int = None) -> pd.DataFrame:
+                                         target_samples_per_class=None) -> pd.DataFrame:
         """
         Balance dataset by augmenting underrepresented classes.
 
@@ -285,6 +283,7 @@ class DataAugmentation:
 
         logger.info(f"Augmentation plan: {augmentation_plan}")
 
+        df = df.copy()
         df['augmentation_factor'] = df['food_category_id'].map(augmentation_plan)
 
         return df
@@ -344,32 +343,32 @@ def main():
 
     # Test augmentation
     augmented = augmenter.augment_image(sample_image, method='albumentations')
-    print(f"Original shape: {sample_image.shape}")
-    print(f"Augmented shape: {augmented.shape}")
+    logger.info(f"Original shape: {sample_image.shape}")
+    logger.info(f"Augmented shape: {augmented.shape}")
 
     # Test batch augmentation
     batch_images = np.random.rand(10, 224, 224, 3).astype(np.float32)
     batch_labels = np.random.randint(0, 10, size=(10,))
 
-    aug_images, aug_labels = augmenter.augment_batch(
+    aug_images, _ = augmenter.augment_batch(
         batch_images, batch_labels, augment_factor=3
     )
 
-    print(f"\nOriginal batch size: {len(batch_images)}")
-    print(f"Augmented batch size: {len(aug_images)}")
+    logger.info(f"\nOriginal batch size: {len(batch_images)}")
+    logger.info(f"Augmented batch size: {len(aug_images)}")
 
     # Test PyTorch dataset
     dataset = augmenter.create_pytorch_dataset(
         batch_images, batch_labels, augment=True
     )
 
-    print(f"\nPyTorch Dataset created: {dataset}")
-    print(f"Dataset length: {len(dataset)}")
+    logger.info(f"\nPyTorch Dataset created: {dataset}")
+    logger.info(f"Dataset length: {len(dataset)}")
 
     # Test one sample
     img, lbl = dataset[0]
-    print(f"Sample image shape: {img.shape}")  # Should be [C, H, W]
-    print(f"Sample label: {lbl}")
+    logger.info(f"Sample image shape: {img.shape}")  # Should be [C, H, W]
+    logger.info(f"Sample label: {lbl}")
 
 
 if __name__ == "__main__":

@@ -1,19 +1,20 @@
+# pylint: disable=no-member
 """
 Step 2: U-Net Image Segmentation (PyTorch Implementation)
 Implements U-Net for segmenting food from background.
 """
+import sys
+from pathlib import Path
+from typing import List
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import cv2
-from pathlib import Path
 import pandas as pd
-from typing import Tuple, List, Dict
 from loguru import logger
-import sys
-from pathlib import Path
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -23,7 +24,7 @@ from source.config import config
 class UNetModel(nn.Module):
     """U-Net architecture for image segmentation."""
 
-    def __init__(self, in_channels=3, out_channels=1, filters=[64, 128, 256, 512, 1024]):
+    def __init__(self, in_channels=3, out_channels=1, filters=None):
         """
         Initialize U-Net model.
 
@@ -33,6 +34,8 @@ class UNetModel(nn.Module):
             filters: List of filter sizes for each layer
         """
         super(UNetModel, self).__init__()
+        if filters is None:
+            filters = [64, 128, 256, 512, 1024]
         self.filters = filters
 
         # Encoder (downsampling path)
@@ -138,9 +141,7 @@ class SegmentationDataset(Dataset):
 class UNetSegmentation:
     """U-Net model for food image segmentation."""
 
-    def __init__(self, img_size: int = config.SEGMENTATION_IMG_SIZE,
-                 filters: List[int] = config.UNET_FILTERS,
-                 device: str = None):
+    def __init__(self, img_size=None, filters=None, device=None):
         """
         Initialize U-Net segmentation model.
 
@@ -149,8 +150,8 @@ class UNetSegmentation:
             filters: List of filter sizes for each layer
             device: Device to use ('cuda' or 'cpu')
         """
-        self.img_size = img_size
-        self.filters = filters
+        self.img_size = img_size or config.SEGMENTATION_IMG_SIZE
+        self.filters = filters or config.UNET_FILTERS
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None
 
@@ -243,11 +244,13 @@ class UNetSegmentation:
                     cv2.grabCut(img_uint8, mask_gc, rect, bgd_model, fgd_model, 5,
                                cv2.GC_INIT_WITH_RECT)
                     mask = np.where((mask_gc == 2) | (mask_gc == 0), 0, 255).astype(np.uint8)
-                except:
+                except cv2.error:  # pylint: disable=catching-non-exception
                     # Fallback to Otsu if GrabCut fails
                     gray = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2GRAY)
                     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
                     _, mask = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            else:
+                raise ValueError(f"Unknown method: {method}")
 
             # Resize mask to match model input size
             mask_resized = cv2.resize(mask, (self.img_size, self.img_size))
@@ -319,7 +322,7 @@ class UNetSegmentation:
         train_images = np.concatenate([train_before_imgs, train_after_imgs], axis=0)
         val_images = np.concatenate([val_before_imgs, val_after_imgs], axis=0)
 
-        logger.info(f"Creating pseudo ground truth masks...")
+        logger.info("Creating pseudo ground truth masks...")
 
         # Create pseudo masks
         train_masks = self.create_pseudo_masks(train_images, method='otsu')
@@ -365,7 +368,7 @@ class UNetSegmentation:
             train_loss = 0.0
             train_dice = 0.0
 
-            for batch_idx, (images, masks) in enumerate(train_loader):
+            for _, (images, masks) in enumerate(train_loader):
                 images = images.to(self.device)
                 masks = masks.to(self.device)
 
@@ -483,8 +486,11 @@ class UNetSegmentation:
         masked_image = image * binary_mask
         return masked_image
 
-    def save_model(self, path: Path = config.SEGMENTATION_MODEL_PATH):
+    def save_model(self, path=None):
         """Save the trained model."""
+        if path is None:
+            path = config.SEGMENTATION_MODEL_PATH
+            
         if self.model is not None:
             torch.save({
                 'model_state_dict': self.model.state_dict(),
@@ -493,8 +499,11 @@ class UNetSegmentation:
             }, path)
             logger.info(f"Model saved to: {path}")
 
-    def load_model(self, path: Path = config.SEGMENTATION_MODEL_PATH):
+    def load_model(self, path=None):
         """Load a trained model."""
+        if path is None:
+            path = config.SEGMENTATION_MODEL_PATH
+            
         checkpoint = torch.load(path, map_location=self.device)
 
         if self.model is None:
@@ -525,9 +534,9 @@ def main():
         batch_size=8
     )
 
-    print(f"\nTraining completed!")
-    print(f"Final training loss: {history.history['loss'][-1]:.4f}")
-    print(f"Final validation loss: {history.history['val_loss'][-1]:.4f}")
+    logger.info("\nTraining completed!")
+    logger.info(f"Final training loss: {history.history['loss'][-1]:.4f}")
+    logger.info(f"Final validation loss: {history.history['val_loss'][-1]:.4f}")
 
 
 if __name__ == "__main__":

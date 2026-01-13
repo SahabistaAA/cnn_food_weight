@@ -1,22 +1,23 @@
+# pylint: disable=no-member
 """
 Step 5: Weight Prediction using CNN Regression (PyTorch Implementation)
 Predicts the weight of leftover food using regression WITH classification guidance.
 UPDATED: Now uses classification predictions as additional input.
 """
+import sys
+from pathlib import Path
+from typing import Tuple, List, Dict, Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-import timm
-import cv2
-from pathlib import Path
 import pandas as pd
-from typing import Tuple, List, Dict, Optional
+import cv2
+import timm
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from loguru import logger
-import sys
-from pathlib import Path
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -603,7 +604,7 @@ class WeightRegression:
             self.build_model()
 
         # Create data loaders (this will get classification predictions)
-        train_loader, val_loader, train_weights, val_weights = self.create_dataloaders(
+        train_loader, val_loader, _, _ = self.create_dataloaders(
             train_df, val_df,
             batch_size=batch_size,
             use_augmentation=use_augmentation,
@@ -841,7 +842,7 @@ def main():
     # Try to load existing model, or train a small one
     try:
         classifier.load_model()
-    except:
+    except Exception:
         logger.warning("No existing classification model found. Training a quick one...")
         classifier.train(
             data['train'].head(100),
@@ -868,9 +869,9 @@ def main():
         predict_difference=False
     )
 
-    print(f"\nClass-conditioned training completed!")
-    print(f"Final training MAE: {history.history['mae'][-1]:.2f}g")
-    print(f"Final validation MAE: {history.history['val_mae'][-1]:.2f}g")
+    logger.info("\nClass-conditioned training completed!")
+    logger.info(f"Final training MAE: {history.history['mae'][-1]:.2f}g")
+    logger.info(f"Final validation MAE: {history.history['val_mae'][-1]:.2f}g")
 
 
 if __name__ == "__main__":

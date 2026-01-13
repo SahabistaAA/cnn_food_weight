@@ -33,31 +33,26 @@ Images follow the pattern: `XXX_YYY_ZZZ_aft/bef.JPG`
 
 ```
 cnn_food_weight/source/
+├── config/
+│   └── config.py                    # Centralized Configuration
 ├── data/
 │   ├── data_original.xlsx           # Dataset metadata
 │   └── leftover_dataset/
-│       ├── data_before/             # Pre-consumption images
-│       │   ├── 001/
-│       │   ├── 002/
-│       │   └── ...
-│       └── data_after/              # Post-consumption images
-│           ├── 001/
-│           ├── 002/
-│           └── ...
-├── modules/
-│   ├── config.py                    # Configuration settings
-│   ├── step1_data_reader.py        # Data loading and preprocessing
-│   ├── step2_segmentation.py       # U-Net segmentation
-│   ├── step3_augmentation.py       # Data augmentation
-│   ├── step4_classification.py     # EfficientNet classification
-│   └── step5_regression.py         # CNN regression
+├── models/                          # Machine Learning Models (SVM, RF, CNN, etc.)
+│   ├── base_model.py               # Abstract base class
+│   ├── cnn_model.py
+│   ├── svm_model.py
+│   └── ...
+├── modules/                         # Legacy Pipeline Implementation
+│   ├── step1_data_reader.py
+│   ├── step2_segmentation.py
+│   ├── step3_augmentation.py
+│   ├── step4_classification.py
+│   └── step5_regression.py
 ├── tests/
-│   ├── test_unit.py                # Unit tests
-│   ├── test_pipeline.py            # Pipeline integration tests
-│   └── test_e2e.py                 # End-to-end tests
-├── models/                          # Saved models (generated)
-├── outputs/                         # Results and logs (generated)
-├── main.py                          # Main pipeline orchestrator
+│   └── ...
+├── outputs/                         # Results and logs
+├── main.py                          # Unified Pipeline Entry Point
 └── requirements.txt                 # Python dependencies
 ```
 
@@ -79,49 +74,39 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Quick Start - Full Pipeline
+### Run Classification Pipeline
 
-Run the complete pipeline with default settings:
+Run a specific model (options: SVM, RF, DT, KNN, CNN):
 
 ```bash
-python main.py --mode full
+python source/main.py --model SVM
 ```
 
-### Quick Test Mode
+### Model Comparison
 
-Test the pipeline with reduced epochs (for validation):
+Compare all implemented models:
 
 ```bash
-python main.py --mode full --quick-test
+python source/main.py --compare
+# OR
+python source/main.py --model ALL
 ```
 
-### Training Only
+### Hyperparameter Optimization
 
-Train models without evaluation:
+Enable Optuna optimization for any model or for comparison:
 
 ```bash
-python main.py --mode train
+python source/main.py --model RF --optimize
+python source/main.py --compare --optimize
 ```
 
-### Evaluation Only
+### Legacy Pipeline Modes
 
-Evaluate pre-trained models:
-
-```bash
-python main.py --mode evaluate
-```
-
-### Custom Configuration
+The original pipeline modes are still supported but might require code adjustments if strict backward compatibility is needed.
 
 ```bash
-# Custom epochs for each model
-python main.py --mode full \
-    --seg-epochs 30 \
-    --cls-epochs 50 \
-    --reg-epochs 50
-
-# Force retraining even if models exist
-python main.py --mode full --no-skip-existing
+python source/main.py --mode full
 ```
 
 ## Pipeline Steps Details
@@ -178,10 +163,9 @@ python step3_augmentation.py
   2. Fine-tuning (last 30 layers unfrozen)
 - Metrics: Accuracy, Top-5 Accuracy
 
-**Run individually:**
+**Run via Main Pipeline:**
 ```bash
-cd modules
-python step4_classification.py
+python source/main.py --model CNN
 ```
 
 ### Step 5: Regression (CNN)

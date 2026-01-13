@@ -1,21 +1,23 @@
+# pylint: disable=no-member
 """
 Step 4: Food Classification using EfficientNet (PyTorch Implementation)
 Classifies food images into different food categories.
 """
+import sys
+from pathlib import Path
+from typing import Tuple, List
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-import timm
-import cv2
-from pathlib import Path
 import pandas as pd
-from typing import Tuple, List, Dict
+import cv2
+import joblib
 from sklearn.preprocessing import LabelEncoder
+import timm
 from loguru import logger
-import sys
-from pathlib import Path
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -144,8 +146,7 @@ class ClassificationDataset(Dataset):
 class FoodClassification:
     """EfficientNet-based food classification model."""
 
-    def __init__(self, num_classes: int, img_size: int = config.IMG_HEIGHT,
-                 pretrained: bool = True, device: str = None):
+    def __init__(self, num_classes: int, img_size=None, pretrained: bool = True, device=None):
         """
         Initialize food classification model.
 
@@ -156,7 +157,7 @@ class FoodClassification:
             device: Device to use ('cuda' or 'cpu')
         """
         self.num_classes = num_classes
-        self.img_size = img_size
+        self.img_size = img_size or config.IMG_HEIGHT
         self.pretrained = pretrained
 
         # Device configuration
@@ -200,12 +201,9 @@ class FoodClassification:
 
         logger.info("Backbone frozen for transfer learning")
 
-    def unfreeze_backbone(self, num_layers: int = 30):
+    def unfreeze_backbone(self):
         """
         Unfreeze layers of the backbone for fine-tuning.
-
-        Args:
-            num_layers: Number of layers to unfreeze from the end
         """
         if self.model is None:
             raise ValueError("Model not built yet!")
@@ -214,7 +212,7 @@ class FoodClassification:
         for param in self.model.backbone.parameters():
             param.requires_grad = True
 
-        logger.info(f"Backbone unfrozen for fine-tuning")
+        logger.info("Backbone unfrozen for fine-tuning")
 
     def prepare_labels(self, food_category_ids: List[str]) -> np.ndarray:
         """
@@ -336,7 +334,7 @@ class FoodClassification:
             correct += predicted.eq(labels).sum().item()
 
             # Top-5 accuracy
-            _, top5_pred = outputs.topk(5, 1, largest=True, sorted=True)
+            _, top5_pred = outputs.topk(min(5, outputs.size(1)), 1, largest=True, sorted=True)
             top5_correct += top5_pred.eq(labels.view(-1, 1).expand_as(top5_pred)).sum().item()
 
             # Print progress
@@ -392,7 +390,7 @@ class FoodClassification:
                 correct += predicted.eq(labels).sum().item()
 
                 # Top-5 accuracy
-                _, top5_pred = outputs.topk(5, 1, largest=True, sorted=True)
+                _, top5_pred = outputs.topk(min(5, outputs.size(1)), 1, largest=True, sorted=True)
                 top5_correct += top5_pred.eq(labels.view(-1, 1).expand_as(top5_pred)).sum().item()
 
         epoch_loss = running_loss / len(val_loader.dataset)
@@ -406,13 +404,13 @@ class FoodClassification:
         }
 
     def train(self, train_df: pd.DataFrame, val_df: pd.DataFrame,
-              epochs: int = config.CLASSIFICATION_EPOCHS,
-              batch_size: int = config.CLASSIFICATION_BATCH_SIZE,
-              learning_rate: float = config.CLASSIFICATION_LEARNING_RATE,
+              epochs=None,
+              batch_size=None,
+              learning_rate=None,
               use_augmentation: bool = True,
               fine_tune: bool = True,
               fine_tune_epochs: int = 20,
-              num_workers: int = 0):  # Windows default
+              num_workers: int = 0):
         """
         Train the classification model.
 
@@ -430,6 +428,14 @@ class FoodClassification:
         Returns:
             Training history dictionary
         """
+        # Use config defaults if not provided
+        if epochs is None:
+            epochs = config.CLASSIFICATION_EPOCHS
+        if batch_size is None:
+            batch_size = config.CLASSIFICATION_BATCH_SIZE
+        if learning_rate is None:
+            learning_rate = config.CLASSIFICATION_LEARNING_RATE
+            
         logger.info("Preparing training data...")
 
         # Build model if not already built
@@ -630,7 +636,7 @@ class FoodClassification:
 
         return predicted_categories, predictions
 
-    def evaluate(self, test_df: pd.DataFrame, batch_size: int = 32) -> Dict:
+    def evaluate(self, test_df: pd.DataFrame, batch_size: int = 32):
         """
         Evaluate model on test set.
 
@@ -668,12 +674,11 @@ class FoodClassification:
 
         return test_metrics
 
-    def get_class_mapping(self) -> Dict[int, str]:
-        """Get mapping from encoded labels to food category IDs."""
-        return {i: label for i, label in enumerate(self.label_encoder.classes_)}
-
-    def save_model(self, path: Path = config.CLASSIFICATION_MODEL_PATH):
+    def save_model(self, path=None):
         """Save the trained model."""
+        if path is None:
+            path = config.CLASSIFICATION_MODEL_PATH
+            
         if self.model is not None:
             # Ensure directory exists
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -688,13 +693,15 @@ class FoodClassification:
             logger.info(f"Model saved to: {path}")
 
             # Save label encoder
-            import joblib
             encoder_path = path.parent / "label_encoder.pkl"
             joblib.dump(self.label_encoder, encoder_path)
             logger.info(f"Label encoder saved to: {encoder_path}")
 
-    def load_model(self, path: Path = config.CLASSIFICATION_MODEL_PATH):
+    def load_model(self, path=None):
         """Load a trained model."""
+        if path is None:
+            path = config.CLASSIFICATION_MODEL_PATH
+            
         # Load checkpoint
         checkpoint = torch.load(path, map_location=self.device)
 
@@ -710,7 +717,6 @@ class FoodClassification:
         logger.info(f"Model loaded from: {path}")
 
         # Load label encoder
-        import joblib
         encoder_path = path.parent / "label_encoder.pkl"
         if encoder_path.exists():
             self.label_encoder = joblib.load(encoder_path)
@@ -727,7 +733,7 @@ def main():
 
     # Get number of unique food categories
     num_classes = data['train']['food_category_id'].nunique()
-    print(f"Number of food categories: {num_classes}")
+    logger.info(f"Number of food categories: {num_classes}")
 
     # Initialize classification model
     classifier = FoodClassification(num_classes=num_classes)
@@ -742,9 +748,9 @@ def main():
         fine_tune=False
     )
 
-    print(f"\nTraining completed!")
-    print(f"Final training accuracy: {history.history['accuracy'][-1]:.4f}")
-    print(f"Final validation accuracy: {history.history['val_accuracy'][-1]:.4f}")
+    logger.info("\nTraining completed!")
+    logger.info(f"Final training accuracy: {history.history['accuracy'][-1]:.4f}")
+    logger.info(f"Final validation accuracy: {history.history['val_accuracy'][-1]:.4f}")
 
 
 if __name__ == "__main__":

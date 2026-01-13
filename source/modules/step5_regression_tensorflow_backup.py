@@ -2,6 +2,7 @@
 Step 5: Weight Prediction using CNN Regression
 Predicts the weight of leftover food using regression.
 """
+# pylint: skip-file
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
@@ -541,9 +542,9 @@ def main():
         predict_difference=False
     )
 
-    print(f"\nTraining completed!")
-    print(f"Final training MAE: {history.history['mae'][-1]:.2f}g")
-    print(f"Final validation MAE: {history.history['val_mae'][-1]:.2f}g")
+    logger.info(f"\nTraining completed!")
+    logger.info(f"Final training MAE: {history.history['mae'][-1]:.2f}g")
+    logger.info(f"Final validation MAE: {history.history['val_mae'][-1]:.2f}g")
 
 
 if __name__ == "__main__":

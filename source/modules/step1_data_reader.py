@@ -2,14 +2,14 @@
 Step 1: Data Reading and Preprocessing
 Reads the Excel file and organizes image-weight pairs with train/val/test split.
 """
-import pandas as pd
-import numpy as np
-from pathlib import Path
-from sklearn.model_selection import train_test_split
-from typing import Tuple, Dict
-from loguru import logger
 import sys
 from pathlib import Path
+from typing import Tuple, Dict
+
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from loguru import logger
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -19,9 +19,7 @@ from source.config import config
 class FoodDataReader:
     """Handles reading and preprocessing of food weight dataset."""
 
-    def __init__(self, excel_path: Path = config.EXCEL_PATH,
-                 images_before_dir: Path = config.IMAGES_BEFORE_DIR,
-                 images_after_dir: Path = config.IMAGES_AFTER_DIR):
+    def __init__(self, excel_path=None, images_before_dir=None, images_after_dir=None):
         """
         Initialize the data reader.
 
@@ -30,9 +28,9 @@ class FoodDataReader:
             images_before_dir: Directory containing before-eating images
             images_after_dir: Directory containing after-eating images
         """
-        self.excel_path = excel_path
-        self.images_before_dir = images_before_dir
-        self.images_after_dir = images_after_dir
+        self.excel_path = excel_path or config.EXCEL_PATH
+        self.images_before_dir = images_before_dir or config.IMAGES_BEFORE_DIR
+        self.images_after_dir = images_after_dir or config.IMAGES_AFTER_DIR
         self.df = None
 
     def read_excel(self) -> pd.DataFrame:
@@ -82,7 +80,7 @@ class FoodDataReader:
         missing_before = []
         missing_after = []
 
-        for idx, row in self.df.iterrows():
+        for _, row in self.df.iterrows():
             # Extract food category ID from image filename
             food_category_id = self.extract_food_category_id(row['Image Before Eaten'])
 
@@ -123,23 +121,33 @@ class FoodDataReader:
         return df
 
     def create_train_val_test_split(self, df: pd.DataFrame,
-                                     train_ratio: float = config.TRAIN_RATIO,
-                                     val_ratio: float = config.VAL_RATIO,
-                                     test_ratio: float = config.TEST_RATIO,
-                                     random_state: int = config.RANDOM_SEED) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+                                     train_ratio=None,
+                                     val_ratio=None,
+                                     test_ratio=None,
+                                     random_state=None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Split data into train, validation, and test sets.
 
         Args:
             df: Input dataframe
-            train_ratio: Proportion for training set (default: 0.70)
-            val_ratio: Proportion for validation set (default: 0.15)
-            test_ratio: Proportion for test set (default: 0.15)
+            train_ratio: Proportion for training set
+            val_ratio: Proportion for validation set
+            test_ratio: Proportion for test set
             random_state: Random seed for reproducibility
 
         Returns:
             Tuple of (train_df, val_df, test_df)
         """
+        # Use config values if not provided
+        if train_ratio is None:
+            train_ratio = config.TRAIN_RATIO
+        if val_ratio is None:
+            val_ratio = config.VAL_RATIO
+        if test_ratio is None:
+            test_ratio = config.TEST_RATIO
+        if random_state is None:
+            random_state = config.RANDOM_SEED
+            
         assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-5, \
             "Ratios must sum to 1.0"
 
@@ -205,6 +213,10 @@ class FoodDataReader:
                    f"Test: {len(test_df)/len(df_filtered)*100:.1f}%")
 
         # Add split column
+        train_df = train_df.copy()
+        val_df = val_df.copy()
+        test_df = test_df.copy()
+        
         train_df['split'] = 'train'
         val_df['split'] = 'val'
         test_df['split'] = 'test'
@@ -226,8 +238,11 @@ class FoodDataReader:
         return mapping
 
     def save_split_data(self, train_df: pd.DataFrame, val_df: pd.DataFrame,
-                       test_df: pd.DataFrame, output_path: Path = config.TRAIN_VAL_TEST_SPLIT_PATH):
+                       test_df: pd.DataFrame, output_path=None):
         """Save the split data to CSV for reproducibility."""
+        if output_path is None:
+            output_path = config.TRAIN_VAL_TEST_SPLIT_PATH
+            
         combined_df = pd.concat([train_df, val_df, test_df], ignore_index=True)
         combined_df.to_csv(output_path, index=False)
         logger.info(f"Saved data split to: {output_path}")
@@ -273,11 +288,11 @@ def main():
     reader = FoodDataReader()
     data = reader.process()
 
-    print(f"\nTrain samples: {len(data['train'])}")
-    print(f"Val samples: {len(data['val'])}")
-    print(f"Test samples: {len(data['test'])}")
-    print(f"\nFood categories: {len(data['food_mapping'])}")
-    print(f"\nSample data:\n{data['train'].head()}")
+    logger.info(f"\nTrain samples: {len(data['train'])}")
+    logger.info(f"Val samples: {len(data['val'])}")
+    logger.info(f"Test samples: {len(data['test'])}")
+    logger.info(f"\nFood categories: {len(data['food_mapping'])}")
+    logger.info(f"\nSample data:\n{data['train'].head()}")
 
 
 if __name__ == "__main__":
