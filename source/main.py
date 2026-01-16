@@ -15,7 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from source.config import config
 from source.modules.step1_data_reader import FoodDataReader
 from source.modules.step2_segmentation import UNetSegmentation
-from source.modules.step3_augmentation import DataAugmentation
+#from source.modules.step3_augmentation import DataAugmentation
 from source.modules.step4_classification import FoodClassification
 from source.models.svm_model import SVMClassifier
 from source.models.rf_model import RFClassifier
