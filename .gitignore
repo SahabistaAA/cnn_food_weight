@@ -97,3 +97,6 @@ source/__pycache__
 outputs
 output_models
 *.pkl
+
+test*
+verify*
