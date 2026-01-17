@@ -85,6 +85,46 @@ class FoodPipeline:
 
     def run_classification(self, model_name: str, optimize: bool = False):
         logger.info(f"Running classification with {model_name}...")
+        
+        # Special handling for ComplexCNN - run only classification component
+        if model_name.upper() == 'COMPLEXCNN':
+            logger.info("Running ComplexCNN classification component for comparison...")
+            
+            # Create and train classification model
+            classification_model = FoodClassification(
+                num_classes=self.num_classes,
+                img_size=config.IMG_HEIGHT,
+                pretrained=True
+            )
+            
+            # Train with default or optimized parameters
+            if optimize:
+                logger.warning("Optimization not yet implemented for ComplexCNN in comparison mode")
+            
+            classification_model.train(
+                self.data['train'],
+                self.data['val'],
+                epochs=config.CLASSIFICATION_EPOCHS,
+                batch_size=config.CLASSIFICATION_BATCH_SIZE,
+                use_augmentation=True,
+                fine_tune=True,
+                fine_tune_epochs=20,
+                num_workers=0
+            )
+            
+            # Evaluate on test set
+            metrics = classification_model.evaluate(
+                self.data['test'],
+                batch_size=config.CLASSIFICATION_BATCH_SIZE
+            )
+            
+            # Save model
+            classification_model.save_model(config.MODELS_DIR / "complexcnn_classification.pth")
+            
+            self.results[model_name] = metrics
+            return metrics
+        
+        # Standard classification models
         model = get_model(model_name, self.num_classes)
         
         # Optimization
@@ -445,9 +485,10 @@ class FoodPipeline:
 
     def compare_models(self, models_to_run: list = None, optimize: bool = False):
         if models_to_run is None:
-            models_to_run = ['SVM', 'RF', 'DT', 'KNN', 'CNN']
+            models_to_run = ['SVM', 'RF', 'DT', 'KNN', 'CNN', 'ComplexCNN']
             
         logger.info(f"Comparing models: {models_to_run}")
+        logger.info("Note: ComplexCNN comparison uses only its classification component (EfficientNet)")
         comparison = []
         
         for name in models_to_run:
