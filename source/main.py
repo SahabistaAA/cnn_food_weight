@@ -300,18 +300,33 @@ class FoodPipeline:
                        optimized_params: dict = None):
         """
         Run the complete ComplexCNN pipeline with all modules.
-        
+
         Args:
             segmentation_epochs: Epochs for U-Net training
             classification_epochs: Epochs for classification training
             regression_epochs: Epochs for regression training
             batch_size: Batch size for training
+            classification_lr: Learning rate for classification
+            regression_lr: Learning rate for regression
             use_segmentation: Whether to train and use segmentation
             use_augmentation: Whether to use data augmentation
             fine_tune_classification: Whether to fine-tune classification model
             dual_input_regression: Whether to use both before/after images for regression
             predict_difference: Whether to predict weight difference or absolute weight
+            optimized_params: Dictionary of optimized parameters from Optuna
         """
+        if optimized_params:
+            logger.info("Applying optimized parameters...")
+            classification_lr = optimized_params.get('classification_lr', classification_lr)
+            batch_size = optimized_params.get('classification_batch_size', batch_size)
+            regression_lr = optimized_params.get('regression_lr', regression_lr)
+            # Note: We use classification_batch_size for both for simplicity or separate if needed
+            # In optimize_complex_cnn we have both, but here we only have one batch_size arg.
+            # Let's favor the classification one or handle them separately if we update signature.
+            use_augmentation = optimized_params.get('use_augmentation', use_augmentation)
+            dual_input_regression = optimized_params.get('dual_input_regression', dual_input_regression)
+            logger.info(f"Updated params: LR_Class={classification_lr}, LR_Reg={regression_lr}, Batch={batch_size}, Aug={use_augmentation}")
+
         logger.info("="*80)
         logger.info("Starting ComplexCNN Pipeline")
         logger.info("="*80)
@@ -343,7 +358,8 @@ class FoodPipeline:
                     self.data['train'],
                     self.data['val'],
                     epochs=segmentation_epochs,
-                    batch_size=batch_size
+                    batch_size=batch_size,
+                    learning_rate=classification_lr if classification_lr else 0.001
                 )
                 
                 results['segmentation'] = {
@@ -383,6 +399,7 @@ class FoodPipeline:
                 self.data['val'],
                 epochs=classification_epochs,
                 batch_size=batch_size,
+                learning_rate=classification_lr if classification_lr else config.CLASSIFICATION_LEARNING_RATE,
                 use_augmentation=use_augmentation,
                 fine_tune=fine_tune_classification,
                 fine_tune_epochs=20,
@@ -426,6 +443,7 @@ class FoodPipeline:
                 self.data['val'],
                 epochs=regression_epochs,
                 batch_size=batch_size,
+                learning_rate=regression_lr if regression_lr else config.REGRESSION_LEARNING_RATE,
                 use_augmentation=use_augmentation,
                 predict_difference=predict_difference,
                 num_workers=0
@@ -546,6 +564,10 @@ def main():
     pipeline.load_data()
     
     if args.model == 'ComplexCNN':
+        best_params = None
+        if args.optimize:
+            best_params = pipeline.optimize_complex_cnn(n_trials=config.OPTUNA_N_TRIALS)
+            
         logger.info("Running ComplexCNN pipeline with all modules...")
         pipeline.run_complex_cnn(
             segmentation_epochs=args.seg_epochs,
@@ -556,7 +578,8 @@ def main():
             use_augmentation=not args.no_augmentation,
             fine_tune_classification=not args.no_fine_tune,
             dual_input_regression=not args.single_input,
-            predict_difference=args.predict_difference
+            predict_difference=args.predict_difference,
+            optimized_params=best_params
         )
     elif args.compare or args.model == 'ALL':
         pipeline.compare_models(optimize=args.optimize)
