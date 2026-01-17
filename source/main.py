@@ -256,7 +256,7 @@ class FoodPipeline:
         
         # Create Optuna study
         study = optuna.create_study(
-            direction='maximize',
+            #direction='maximize',
             sampler=TPESampler(seed=config.RANDOM_SEED)
         )
         
