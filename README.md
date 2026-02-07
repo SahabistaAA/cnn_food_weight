@@ -38,19 +38,23 @@ cnn_food_weight/source/
 ├── data/
 │   ├── data_original.xlsx           # Dataset metadata
 │   └── leftover_dataset/
-├── models/                          # Machine Learning Models (SVM, RF, CNN, etc.)
-│   ├── base_model.py               # Abstract base class
-│   ├── cnn_model.py
+├── models/                          # Machine Learning Models
+│   ├── cnn/                         # CNN Implementations
+│   │   ├── cnn_non_pretrained.py    # Scratch EfficientNet-B0
+│   │   └── cnn_pretrained.py        # Pretrained EfficientNet-B0
+│   ├── base_model.py                # Abstract base class
+│   ├── cnn_model.py                 # Legacy wrapper
 │   ├── svm_model.py
 │   └── ...
+├── helpers/                         # Helper Utilities
+│   ├── efficientnet_b0.py           # EfficientNet Architecture
+│   └── efficientnet_b0_visualization.py # Math Visualization Engine
 ├── modules/                         # Legacy Pipeline Implementation
 │   ├── step1_data_reader.py
 │   ├── step2_segmentation.py
 │   ├── step3_augmentation.py
 │   ├── step4_classification.py
 │   └── step5_regression.py
-├── tests/
-│   └── ...
 ├── outputs/                         # Results and logs
 ├── main.py                          # Unified Pipeline Entry Point
 └── requirements.txt                 # Python dependencies
@@ -79,7 +83,25 @@ pip install -r requirements.txt
 Run a specific model (options: SVM, RF, DT, KNN, CNN):
 
 ```bash
+# Standard training
 python source/main.py --model SVM
+
+# Train EfficientNet with Mathematical Visualization
+python source/main.py --model CNN --use-visualization
+```
+
+### Visualizing Model Mathematics
+
+The project includes an advanced **Mathematical Visualizer** for the EfficientNet-B0 model. This feature prints the underlying mathematical formulas and tensor shape transformations for each layer during training or inference.
+
+**Features:**
+- **Epoch-wise Logging:** Summarizes the model's forward and backward pass math at the start of each epoch.
+- **Layer-wise Detail:** Shows formulas for Convolution, Depthwise-Separable Conv, Squeeze-Excitation, and more.
+- **Non-intrusive:** Implemented via PyTorch hooks, ensuring no impact on training logic.
+
+To verify the visualizer without training:
+```bash
+python verify_viz.py
 ```
 
 ### Model Comparison
@@ -165,7 +187,11 @@ python step3_augmentation.py
 
 **Run via Main Pipeline:**
 ```bash
+# Standard Transfer Learning
 python source/main.py --model CNN
+
+# Train from Scratch with Math Visualization
+python source/main.py --model CNN --use-visualization
 ```
 
 ### Step 5: Regression (CNN)
