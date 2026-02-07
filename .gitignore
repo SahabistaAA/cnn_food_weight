@@ -59,7 +59,7 @@ source/outputs/test_results_*.json
 *~
 
 logs/
-
+dumps/
 
 # OS files
 .DS_Store
