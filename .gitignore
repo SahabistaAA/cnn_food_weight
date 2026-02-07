@@ -58,6 +58,9 @@ source/outputs/test_results_*.json
 *.swp
 *~
 
+logs/
+
+
 # OS files
 .DS_Store
 Thumbs.db
