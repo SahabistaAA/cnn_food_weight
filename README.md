@@ -86,8 +86,14 @@ Run a specific model (options: SVM, RF, DT, KNN, CNN):
 # Standard training
 python source/main.py --model SVM
 
+# Train EfficientNet CNN with Pre-trained Weights (Default)
+python source/main.py --model CNN --pretrained
+
+# Train EfficientNet CNN from Scratch without Pre-trained Weights
+python source/main.py --model CNN --non-pretrained
+
 # Train EfficientNet with Mathematical Visualization
-python source/main.py --model CNN --use-visualization
+python source/main.py --model CNN --non-pretrained --use-visualization
 ```
 
 ### Visualizing Model Mathematics
@@ -187,11 +193,14 @@ python step3_augmentation.py
 
 **Run via Main Pipeline:**
 ```bash
-# Standard Transfer Learning
-python source/main.py --model CNN
+# Standard Transfer Learning (Pre-trained)
+python source/main.py --model CNN --pretrained
+
+# Train from Scratch (Non-pretrained)
+python source/main.py --model CNN --non-pretrained
 
 # Train from Scratch with Math Visualization
-python source/main.py --model CNN --use-visualization
+python source/main.py --model CNN --non-pretrained --use-visualization
 ```
 
 ### Step 5: Regression (CNN)

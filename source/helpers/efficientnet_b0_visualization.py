@@ -6,14 +6,7 @@ operations and tensor transformations within EfficientNet-B0 during interference
 
 import torch
 import torch.nn as nn
-from typing import Dict, List, Optional, Any, Callable
-from collections import OrderedDict
-import sys
-from pathlib import Path
-
-# Import model definition to identify modules
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from source.helpers.efficientnet_b0 import MBConvBlock, SqueezeExcitation, Swish, EfficientNetB0
+from typing import Dict, List, Any
 
 
 class MathFormatter:
@@ -139,70 +132,57 @@ class EfficientNetMathTracer:
 
         if type_tag == "stem_conv":
             lines.append(f"├── {name}")
-            lines.append(f"│   Formula: Y_i,j,k = ∑_c ∑_m,n X_c,i+m,j+n · W_k,c,m,n")
+            lines.append("│   Formula: Y_i,j,k = ∑_c ∑_m,n X_c,i+m,j+n · W_k,c,m,n")
             lines.append(f"│   Input:   {formatter.format_shape(x.shape)}")
             lines.append(f"│   Kernel:  {formatter.format_kernel(module)}, Stride={module.stride[0]}")
             lines.append(f"│   Output:  {formatter.format_shape(y.shape)} (Channel Expansion: {x.shape[1]}→{y.shape[1]})")
 
         elif type_tag == "mbconv_block":
-            # This is the wrapper block. We used it to frame the MBConv section.
-            # We can print the block header here, or rely on the sub-components.
-            # Let's print a high-level summary of the block's config.
-            # Note: The sub-components (expand, dw, se) naturally run INSIDE this, 
-            # but hooks fire AFTER forward. So this hook fires LAST for the block.
-            # This is tricky for ordering. 
-            pass # We will rely on sub-hooks for details, checking if we need a footer?
+            pass 
             
         elif type_tag == "mbconv_expand":
-            # Just parsed parent name "MBConv Block N"
             block_header = name.split(" - ")[0]
             lines.append(f"├── {block_header}")
-            lines.append(f"│   ├── Expansion Phase")
-            lines.append(f"│   │   Formula: X_exp = Conv₁ₓ₁(X) · t")
+            lines.append("│   ├── Expansion Phase")
+            lines.append("│   │   Formula: X_exp = Conv₁ₓ₁(X) · t")
             lines.append(f"│   │   Input:   {formatter.format_shape(x.shape)}")
             lines.append(f"│   │   Output:  {formatter.format_shape(y.shape)}")
             
         elif type_tag == "mbconv_dw":
-            lines.append(f"│   ├── Depthwise Convolution")
-            lines.append(f"│   │   Formula: X_dw = DWConv_k×k(X_exp)")
+            lines.append("│   ├── Depthwise Convolution")
+            lines.append("│   │   Formula: X_dw = DWConv_k×k(X_exp)")
             lines.append(f"│   │   Kernel:  {formatter.format_kernel(module)}, Stride={module.stride[0]}")
             lines.append(f"│   │   Output:  {formatter.format_shape(y.shape)}")
 
         elif type_tag == "mbconv_se":
-            lines.append(f"│   ├── Squeeze-and-Excitation")
-            lines.append(f"│   │   Squeeze: z_c = (1/H×W) ∑ X_c(i,j)")
-            lines.append(f"│   │   Excitation: s = σ(W₂ δ(W₁ z))")
-            lines.append(f"│   │   Scale:   X̃_c = s_c · X_c")
-            # SE module input is X, output is Scaled X
-            # Dimensions: Input [N, C, H, W], Output [N, C, H, W]
+            lines.append("│   ├── Squeeze-and-Excitation")
+            lines.append("│   │   Squeeze: z_c = (1/H×W) ∑ X_c(i,j)")
+            lines.append("│   │   Excitation: s = σ(W₂ δ(W₁ z))")
+            lines.append("│   │   Scale:   X̃_c = s_c · X_c")
             lines.append(f"│   │   Shape:   {formatter.format_shape(x.shape)} (unchanged spatial)")
 
         elif type_tag == "mbconv_proj":
-            lines.append(f"│   ├── Projection")
-            lines.append(f"│   │   Formula: X_proj = Conv₁ₓ₁(X_se)")
+            lines.append("│   ├── Projection")
+            lines.append("│   │   Formula: X_proj = Conv₁ₓ₁(X_se)")
             lines.append(f"│   │   Output:  {formatter.format_shape(y.shape)}")
-            lines.append(f"│   └── Skip Connection + DropConnect") 
-            # We assume skip happens if dimensions match, strictly we should check block.use_residual
-            # taking a guess based on shapes is reasonably safe for viz or referencing the module parent if possible
-            # but getting parent from module in callback is hard without partials.
-            # We'll stick to generic description.
-            lines.append(f"│       Formula: X_out = X + DropConnect(X_proj)")
+            lines.append("│   └── Skip Connection + DropConnect") 
+            lines.append("│       Formula: X_out = X + DropConnect(X_proj)")
 
         elif type_tag == "head_conv":
             lines.append(f"├── {name}")
-            lines.append(f"│   Formula: X_head = Conv₁ₓ₁(X_final)")
+            lines.append("│   Formula: X_head = Conv₁ₓ₁(X_final)")
             lines.append(f"│   Input:   {formatter.format_shape(x.shape)}")
             lines.append(f"│   Output:  {formatter.format_shape(y.shape)}")
 
         elif type_tag == "pooling":
             lines.append(f"├── {name}")
-            lines.append(f"│   Formula: f(x) = GlobalAvgPool(X)")
+            lines.append("│   Formula: f(x) = GlobalAvgPool(X)")
             lines.append(f"│   Collapse: {formatter.format_shape(x.shape)} → {formatter.format_shape(y.shape)}")
 
         elif type_tag == "classifier":
             lines.append(f"├── {name}")
-            lines.append(f"│   Formula: σ(z_i) = e^(z_i) / ∑ e^(z_j)")
-            lines.append(f"│   Loss:    L = -∑ y'_i log(ŷ_i)")
+            lines.append("│   Formula: σ(z_i) = e^(z_i) / ∑ e^(z_j)")
+            lines.append("│   Loss:    L = -∑ y'_i log(ŷ_i)")
             lines.append(f"│   Input:   {formatter.format_shape(x.shape)}")
             lines.append(f"│   Logits:  {formatter.format_shape(y.shape)}")
             

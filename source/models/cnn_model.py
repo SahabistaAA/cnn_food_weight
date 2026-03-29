@@ -16,7 +16,6 @@ import optuna
 from sklearn.preprocessing import LabelEncoder
 from loguru import logger
 import sys
-import copy
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -74,15 +73,15 @@ class ClassificationDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = self.image_paths[idx]
-        img = cv2.imread(str(img_path))
+        img = cv2.imread(str(img_path))   # pylint: disable=no-member
 
         if img is None:
             # logger.warning(f"Failed to load image: {img_path}")
             img = np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8)
         else:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
 
-        img = cv2.resize(img, (self.img_size, self.img_size))
+        img = cv2.resize(img, (self.img_size, self.img_size))  # pylint: disable=no-member
 
         if self.transform:
             augmented = self.transform(image=img)
@@ -101,7 +100,7 @@ class CNNClassifier(BaseFoodClassifier):
     """EfficientNet-based Classifier with Optuna optimization."""
     
     def __init__(self, num_classes: int, img_size: int = config.IMG_HEIGHT, 
-                 device: str = None, **kwargs):
+                 device: str = None, pretrained: bool = True, **kwargs):
         super().__init__(num_classes, **kwargs)
         self.img_size = img_size
         if device is None:
@@ -112,7 +111,7 @@ class CNNClassifier(BaseFoodClassifier):
         self.label_encoder = LabelEncoder()
         
         # Build model
-        self.build_model()
+        self.build_model(pretrained=pretrained)
         
     def build_model(self, pretrained: bool = True):
         self.model = EfficientNetClassifier(
@@ -284,7 +283,7 @@ class CNNClassifier(BaseFoodClassifier):
         test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
         
         criterion = nn.CrossEntropyLoss()
-        test_loss, test_acc = self.validate(test_loader, criterion)
+        _, test_acc = self.validate(test_loader, criterion)
         
         logger.info(f"CNN Test Accuracy: {test_acc:.4f}")
         return {'accuracy': test_acc}

@@ -21,9 +21,20 @@ from source.models.svm_model import SVMClassifier
 from source.models.rf_model import RFClassifier
 from source.models.dt_model import DTClassifier
 from source.models.knn_model import KNNClassifier
+from source.models.cnn_model import CNNClassifier
 from source.models.cnn.cnn_non_pretrained import CNNScratchClassifier
+from source.models.cnn.cnn_pretrained import CNNPretrainedScratchClassifier
+from source.modules.step5_regression import WeightRegression
 
-def get_model(model_name: str, num_classes: int, use_visualization: bool = False):
+logger.add(
+    config.OUTPUTS_DIR / 'pipeline.log',
+    rotation="10 MB",
+    retention="7 days",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+)
+
+def get_model(model_name: str, num_classes: int, use_visualization: bool = False, pretrained: bool = True):
     """Factory to get model instance."""
     if model_name.upper() == 'SVM':
         return SVMClassifier(num_classes)
@@ -35,16 +46,19 @@ def get_model(model_name: str, num_classes: int, use_visualization: bool = False
         return KNNClassifier(num_classes)
     elif model_name.upper() == 'CNN':
         if use_visualization:
-            logger.info("Using CNNScratchClassifier with Mathematical Visualization")
-            return CNNScratchClassifier(num_classes, use_visualization=True)
-        return CNNClassifier(num_classes)
+            if pretrained:
+                logger.info("Using CNNPretrainedScratchClassifier with Mathematical Visualization (Transfer Learning & Tracer)")
+                return CNNPretrainedScratchClassifier(num_classes, use_visualization=True)
+            else:
+                logger.info("Using CNNScratchClassifier (Scratch parameters) with Mathematical Visualization")
+                return CNNScratchClassifier(num_classes, use_visualization=True)
+        return CNNClassifier(num_classes, pretrained=pretrained)
     elif model_name.upper() == 'COMPLEXCNN':
         return 'COMPLEXCNN'
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
 class FoodPipeline:
-    # ... (init and load_data unchanged) ...
     def __init__(self):
         self.data = None
         self.results = {}
@@ -78,19 +92,18 @@ class FoodPipeline:
         logger.info("Segmentation training completed!")
         return history
 
-    def run_classification(self, model_name: str, optimize: bool = False, use_visualization: bool = False):
+    def run_classification(self, model_name: str, optimize: bool = False, use_visualization: bool = False, pretrained: bool = True):
         logger.info(f"Running classification with {model_name}...")
         
         # Special handling for ComplexCNN - run only classification component
         if model_name.upper() == 'COMPLEXCNN':
-            # ... (ComplexCNN logic unchanged) ...
             logger.info("Running ComplexCNN classification component for comparison...")
             
             # Create and train classification model
             classification_model = FoodClassification(
                 num_classes=self.num_classes,
                 img_size=config.IMG_HEIGHT,
-                pretrained=True
+                pretrained=pretrained
             )
             
             # Train with default or optimized parameters
@@ -121,7 +134,7 @@ class FoodPipeline:
             return metrics
         
         # Standard classification models
-        model = get_model(model_name, self.num_classes, use_visualization)
+        model = get_model(model_name, self.num_classes, use_visualization, pretrained=pretrained)
         
         # Optimization
         if optimize:
@@ -152,10 +165,16 @@ class FoodPipeline:
         self.results[model_name] = metrics
         return metrics
 
-    # ... (rest of methods unchanged until main) ...
-
     def optimize_complex_cnn(self, n_trials: int = 20):
-        # ... (optimization logic unchanged) ...
+        """
+        Optimize ComplexCNN hyperparameters using Optuna.
+        
+        Args:
+            n_trials: Number of Optuna trials
+            
+        Returns:
+            Best hyperparameters dictionary
+        """
         import optuna
         from optuna.samplers import TPESampler
         
@@ -185,7 +204,7 @@ class FoodPipeline:
                 classification_model = FoodClassification(
                     num_classes=self.num_classes,
                     img_size=config.IMG_HEIGHT,
-                    pretrained=True
+                    pretrained=True # Enforced True for optimization defaults unless added to optuna space
                 )
                 
                 # Quick training (reduced epochs for optimization)
@@ -491,7 +510,7 @@ class FoodPipeline:
         
         return results
 
-    def compare_models(self, models_to_run: list = None, optimize: bool = False):
+    def compare_models(self, models_to_run: list = None, optimize: bool = False, pretrained: bool = True):
         if models_to_run is None:
             models_to_run = ['SVM', 'RF', 'DT', 'KNN', 'CNN', 'ComplexCNN']
             
@@ -501,7 +520,7 @@ class FoodPipeline:
         
         for name in models_to_run:
             try:
-                metrics = self.run_classification(name, optimize)
+                metrics = self.run_classification(name, optimize, pretrained=pretrained)
                 metrics['Model'] = name
                 comparison.append(metrics)
             except Exception as e:
@@ -531,6 +550,12 @@ def main():
     # Visualization argument
     parser.add_argument('--use-visualization', action='store_true',
                         help='Enable mathematical visualization for CNN models')
+    
+    # Pretrained toggle for CNN
+    parser.add_argument('--pretrained', action='store_true', default=True,
+                        help='Use pre-trained weights for CNN and ComplexCNN (default)')
+    parser.add_argument('--non-pretrained', action='store_false', dest='pretrained',
+                        help='Do not use pre-trained weights for CNN and ComplexCNN')
 
     # ComplexCNN specific arguments
     parser.add_argument('--seg-epochs', type=int, default=30,
@@ -558,11 +583,6 @@ def main():
     pipeline.load_data()
     
     if args.model == 'ComplexCNN':
-        # ... (ComplexCNN runner logic, visualizer mostly for CNN component, passing arg not supported deeply in ComplexCNN yet)
-        # Note: ComplexCNN uses 'FoodClassification' wrapper which wraps 'EfficientNetClassifier' (timm) or similar.
-        # Our visualizer is on 'CNNScratchClassifier'. 
-        # If user wants visualizer, they should use --model CNN.
-        
         best_params = None
         if args.optimize:
             best_params = pipeline.optimize_complex_cnn(n_trials=config.OPTUNA_N_TRIALS)
@@ -581,9 +601,9 @@ def main():
             optimized_params=best_params
         )
     elif args.compare or args.model == 'ALL':
-        pipeline.compare_models(optimize=args.optimize)
+        pipeline.compare_models(optimize=args.optimize, pretrained=args.pretrained)
     else:
-        pipeline.run_classification(args.model, optimize=args.optimize, use_visualization=args.use_visualization)
+        pipeline.run_classification(args.model, optimize=args.optimize, use_visualization=args.use_visualization, pretrained=args.pretrained)
 
 if __name__ == "__main__":
     main()
